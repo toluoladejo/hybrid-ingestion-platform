@@ -1,0 +1,4 @@
+order_id,order_date,customer_id,amount
+A2001,2026-11-02,C042,129.99
+,2026-11-02,C017,15.00
+A2001,02/11/2026,C042,abc
