@@ -2,6 +2,9 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .venv/
-infra/**/*.json
-!infra/bicepconfig.json
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
 .env

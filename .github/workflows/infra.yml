@@ -12,20 +12,27 @@ permissions:
   contents: read
 
 jobs:
-  what-if:
+  plan:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    env:
+      ARM_USE_OIDC: true
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+    defaults:
+      run:
+        working-directory: infra
     steps:
       - uses: actions/checkout@v4
-      - uses: azure/login@v2
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      - run: az bicep lint --file infra/main.bicep
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform fmt -check -recursive
       - run: |
-          az deployment group what-if -g rg-ingest-dev \
-            -f infra/main.bicep -p infra/dev.bicepparam
+          terraform init -input=false \
+            -backend-config="storage_account_name=${{ vars.TFSTATE_STORAGE_ACCOUNT }}" \
+            -backend-config="key=dev.tfstate"
+      - run: terraform validate
+      - run: terraform plan -input=false -lock=false -var-file=env/dev.tfvars
 
   deploy-dev:
     if: github.event_name == 'push'

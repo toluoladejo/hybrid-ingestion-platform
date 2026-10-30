@@ -14,14 +14,19 @@ jobs:
     permissions:
       id-token: write
       contents: read
+    env:
+      ARM_USE_OIDC: true
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+    defaults:
+      run:
+        working-directory: infra
     steps:
       - uses: actions/checkout@v4
-      - uses: azure/login@v2
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - uses: hashicorp/setup-terraform@v3
       - run: |
-          az deployment group create -g rg-ingest-${{ inputs.environment }} \
-            --name infra-${{ github.run_number }} \
-            -f infra/main.bicep -p infra/${{ inputs.environment }}.bicepparam
+          terraform init -input=false \
+            -backend-config="storage_account_name=${{ vars.TFSTATE_STORAGE_ACCOUNT }}" \
+            -backend-config="key=${{ inputs.environment }}.tfstate"
+      - run: terraform apply -input=false -auto-approve -var-file=env/${{ inputs.environment }}.tfvars
