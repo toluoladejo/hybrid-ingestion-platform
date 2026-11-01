@@ -13,5 +13,3 @@ variable "outbox_password_secret_name" {
   default     = "outbox-password"
   description = "Key Vault secret holding the Windows password for outbox_user. Set by hand, never by Terraform."
 }
-outbox_path = "C:\\outbox"
-outbox_user = "VILSHUB-NET\\adfreader"   # run `hostname` in PowerShell
