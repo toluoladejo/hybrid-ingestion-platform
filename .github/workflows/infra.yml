@@ -4,7 +4,7 @@ on:
   pull_request:
     paths: ['infra/**', '.github/workflows/infra.yml', '.github/workflows/deploy.yml']
   push:
-    branches: [main]
+    branches: [dev, prod]
     paths: ['infra/**', '.github/workflows/infra.yml', '.github/workflows/deploy.yml']
 
 permissions:
