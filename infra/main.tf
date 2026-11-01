@@ -41,3 +41,17 @@ module "vault" {
   location            = local.location
   tags                = local.tags
 }
+
+module "adf" {
+  source               = "./modules/datafactory"
+  env                  = var.env
+  suffix               = local.suffix
+  resource_group_name  = data.azurerm_resource_group.rg.name
+  location             = local.location
+  tags                 = local.tags
+  storage_account_id   = module.storage.id
+  storage_dfs_endpoint = module.storage.dfs_endpoint
+  key_vault_id         = module.vault.id
+  outbox_path          = var.outbox_path
+  outbox_user          = var.outbox_user
+}
