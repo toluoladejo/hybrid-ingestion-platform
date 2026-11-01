@@ -35,11 +35,12 @@ jobs:
       - run: terraform plan -input=false -lock=false -var-file=env/dev.tfvars
 
   deploy-dev:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     uses: ./.github/workflows/deploy.yml
     with: { environment: dev }
 
   deploy-prod:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/prod'
     needs: deploy-dev
     uses: ./.github/workflows/deploy.yml
     with: { environment: prod } # the prod environment requires a reviewer
