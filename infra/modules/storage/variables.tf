@@ -25,5 +25,5 @@ variable "workspace_id" {
 
 variable "containers" {
   type    = list(string)
-  default = ["landing", "raw", "curated", "quarantine", "archive"]
+  default = ["landing", "raw", "curated", "quarantine", "archive", "synapse"]
 }

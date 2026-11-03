@@ -55,3 +55,18 @@ module "adf" {
   outbox_path          = var.outbox_path
   outbox_user          = var.outbox_user
 }
+
+module "synapse" {
+  source                = "./modules/synapse"
+  env                   = var.env
+  suffix                = local.suffix
+  resource_group_name   = data.azurerm_resource_group.rg.name
+  location              = local.location
+  tags                  = local.tags
+  storage_account_id    = module.storage.id
+  storage_filesystem_id = "${module.storage.dfs_endpoint}${module.storage.container_names["synapse"]}"
+  github_owner          = var.github_owner
+  allowed_ip            = var.allowed_ip
+  reader_object_id      = var.reader_object_id
+  deploy_spark          = var.deploy_spark
+}

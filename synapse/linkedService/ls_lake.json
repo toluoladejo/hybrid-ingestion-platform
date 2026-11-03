@@ -1,0 +1,10 @@
+{
+  "name": "ls_lake",
+  "properties": {
+    "description": "The ingestion lake, reached as the workspace managed identity. The URL is overridden per environment at deploy time (week 7).",
+    "type": "AzureBlobFS",
+    "typeProperties": {
+      "url": "https://<storage-account>.dfs.core.windows.net/"
+    }
+  }
+}

@@ -25,8 +25,45 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false   # so $(terraform output -raw ...) returns just the value
       - run: |
           terraform init -input=false \
             -backend-config="storage_account_name=${{ vars.TFSTATE_STORAGE_ACCOUNT }}" \
             -backend-config="key=${{ inputs.environment }}.tfstate"
       - run: terraform apply -input=false -auto-approve -var-file=env/${{ inputs.environment }}.tfvars
+
+      # Week 5: this app creates the Synapse workspace, so only it is Synapse Administrator.
+      # Grant the same role to SYNAPSE_ADMIN_OBJECT_ID (you). The call goes to the workspace's
+      # dev endpoint, which the firewall protects: open it for this runner, always close it after.
+      - name: Read Synapse workspace name
+        id: syn
+        run: echo "name=$(terraform output -raw synapse_workspace_name)" >> "$GITHUB_OUTPUT"
+      - uses: azure/login@v2
+        if: vars.SYNAPSE_ADMIN_OBJECT_ID != ''
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Synapse RBAC
+        if: vars.SYNAPSE_ADMIN_OBJECT_ID != ''
+        env:
+          WS: ${{ steps.syn.outputs.name }}
+          RG: rg-ingest-${{ inputs.environment }}
+          ADMIN_ID: ${{ vars.SYNAPSE_ADMIN_OBJECT_ID }}
+        run: |
+          IP=$(curl -s https://api.ipify.org)
+          az synapse workspace firewall-rule create -g "$RG" --workspace-name "$WS" \
+            --name gh-runner --start-ip-address "$IP" --end-ip-address "$IP" -o none
+          sleep 60   # firewall changes take a moment
+          if [ -z "$(az synapse role assignment list --workspace-name "$WS" \
+                --role 'Synapse Administrator' --assignee "$ADMIN_ID" --query '[0].id' -o tsv)" ]; then
+            az synapse role assignment create --workspace-name "$WS" \
+              --role 'Synapse Administrator' --assignee-object-id "$ADMIN_ID" \
+              --assignee-principal-type User -o none
+          fi
+      - name: Close runner firewall rule
+        if: always() && vars.SYNAPSE_ADMIN_OBJECT_ID != '' && steps.syn.outputs.name != ''
+        run: |
+          az synapse workspace firewall-rule delete -g rg-ingest-${{ inputs.environment }} \
+            --workspace-name "${{ steps.syn.outputs.name }}" --name gh-runner --yes || true

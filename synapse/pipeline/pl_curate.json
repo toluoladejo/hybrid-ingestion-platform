@@ -1,0 +1,70 @@
+{
+  "name": "pl_curate",
+  "properties": {
+    "description": "One validated CSV in raw/orders/ -> Snappy Parquet in curated/orders/ingest_date=yyyy-MM-dd/. Started by tr_raw_orders.",
+    "parameters": {
+      "folderPath": { "type": "string", "defaultValue": "raw/orders" },
+      "fileName": { "type": "string" }
+    },
+    "activities": [
+      {
+        "name": "CSV to Parquet",
+        "type": "Copy",
+        "policy": { "timeout": "0.00:30:00", "retry": 2, "retryIntervalInSeconds": 60 },
+        "inputs": [
+          {
+            "referenceName": "ds_raw_csv",
+            "type": "DatasetReference",
+            "parameters": {
+              "folder": {
+                "value": "@join(skip(split(pipeline().parameters.folderPath, '/'), 1), '/')",
+                "type": "Expression"
+              },
+              "fileName": { "value": "@pipeline().parameters.fileName", "type": "Expression" }
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_curated_parquet",
+            "type": "DatasetReference",
+            "parameters": {
+              "folder": {
+                "value": "@concat('orders/ingest_date=', formatDateTime(utcnow(), 'yyyy-MM-dd'))",
+                "type": "Expression"
+              },
+              "fileName": {
+                "value": "@replace(pipeline().parameters.fileName, '.csv', '.parquet')",
+                "type": "Expression"
+              }
+            }
+          }
+        ],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": { "type": "AzureBlobFSReadSettings" },
+            "formatSettings": { "type": "DelimitedTextReadSettings" }
+          },
+          "sink": {
+            "type": "ParquetSink",
+            "storeSettings": { "type": "AzureBlobFSWriteSettings" },
+            "formatSettings": { "type": "ParquetWriteSettings" }
+          }
+        }
+      },
+      {
+        "name": "Curate failed",
+        "type": "Fail",
+        "dependsOn": [ { "activity": "CSV to Parquet", "dependencyConditions": [ "Failed" ] } ],
+        "typeProperties": {
+          "message": {
+            "value": "Curate failed for @{pipeline().parameters.fileName}: @{activity('CSV to Parquet').error.message}",
+            "type": "Expression"
+          },
+          "errorCode": "CURATE_FAILED"
+        }
+      }
+    ]
+  }
+}

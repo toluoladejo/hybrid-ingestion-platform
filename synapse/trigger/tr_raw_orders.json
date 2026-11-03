@@ -1,0 +1,24 @@
+{
+  "name": "tr_raw_orders",
+  "properties": {
+    "description": "Starts pl_curate for every CSV that lands in raw/orders/.",
+    "type": "BlobEventsTrigger",
+    "runtimeState": "Started",
+    "typeProperties": {
+      "blobPathBeginsWith": "/raw/blobs/orders/",
+      "blobPathEndsWith": ".csv",
+      "ignoreEmptyBlobs": true,
+      "scope": "/subscriptions/<subscription-id>/resourceGroups/rg-ingest-dev/providers/Microsoft.Storage/storageAccounts/<storage-account>",
+      "events": [ "Microsoft.Storage.BlobCreated" ]
+    },
+    "pipelines": [
+      {
+        "pipelineReference": { "referenceName": "pl_curate", "type": "PipelineReference" },
+        "parameters": {
+          "folderPath": "@triggerBody().folderPath",
+          "fileName": "@triggerBody().fileName"
+        }
+      }
+    ]
+  }
+}
