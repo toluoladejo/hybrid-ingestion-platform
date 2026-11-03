@@ -30,6 +30,17 @@ variable "outbox_user" {
 
 # ---------- Synapse (week 5) ----------
 
+variable "synapse_location" {
+  type        = string
+  default     = null
+  description = <<-EOT
+    Region for the Synapse workspace only. Defaults to location. Set it when Azure refuses
+    the workspace with SqlServerRegionDoesNotAllowProvisioning (the region has no SQL capacity
+    for your subscription). The workspace can use a lake in another region; you pay a little
+    cross-region egress and latency.
+  EOT
+}
+
 variable "github_owner" {
   type        = string
   default     = ""

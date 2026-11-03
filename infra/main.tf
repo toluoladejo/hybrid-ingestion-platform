@@ -61,7 +61,7 @@ module "synapse" {
   env                   = var.env
   suffix                = local.suffix
   resource_group_name   = data.azurerm_resource_group.rg.name
-  location              = local.location
+  location              = coalesce(var.synapse_location, local.location)
   tags                  = local.tags
   storage_account_id    = module.storage.id
   storage_filesystem_id = "${module.storage.dfs_endpoint}${module.storage.container_names["synapse"]}"
