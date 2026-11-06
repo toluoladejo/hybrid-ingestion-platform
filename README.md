@@ -77,6 +77,8 @@ When a validated CSV lands in `raw/orders/`, the storage event trigger `tr_raw_o
 
 1. In `infra/env/dev.tfvars`, set `github_owner`, `allowed_ip` and `reader_object_id`, then deploy
    through a PR as usual. Terraform generates the required SQL admin password; it is never in the repo.
+   If the workspace fails with `SqlServerRegionDoesNotAllowProvisioning`, also set `synapse_location`
+   (see [Synapse troubleshooting](#synapse-troubleshooting)).
 2. Set `gh variable set SYNAPSE_ADMIN_OBJECT_ID --body "$(az ad signed-in-user show --query id -o tsv)"`.
    The deploy job then grants you **Synapse Administrator**. Being Azure Owner does not give access inside the workspace.
 3. Run `scripts/synapse-fill.sh dev` to fill the placeholders in `ls_lake.json` and `tr_raw_orders.json`. Commit the result.
@@ -86,8 +88,34 @@ When a validated CSV lands in `raw/orders/`, the storage event trigger `tr_raw_o
 6. Upload `samples/orders.csv` to `raw/orders/`. A Parquet file appears in `curated/orders/` and its rows
    show up in `SELECT * FROM dbo.orders`.
 
+### Where is the SQL server?
+
+There is no separate SQL server resource. Serverless SQL is built into the workspace, so
+`rg-ingest-<env>` shows only the Synapse workspace (plus `rg-ingest-<env>-synapse-managed`, which
+Synapse owns; never edit it). To connect:
+
+- **Endpoint:** workspace → **Overview** → **Serverless SQL endpoint**, or the Terraform output
+  `synapse_serverless_endpoint` (`syn-ingest-<env>-<suffix>-ondemand.sql.azuresynapse.net`).
+- **Sign-in:** Microsoft Entra ID. Connect to `master` until `01_ingest.sql` has created `ingest`.
+- **Without a client:** Synapse Studio → **Develop** → new SQL script, connected to **Built-in**.
+
+Before any of that works you need steps 1 and 2 above: your IP in `allowed_ip` (firewall),
+your object ID in `reader_object_id` (lake reads) and `SYNAPSE_ADMIN_OBJECT_ID` (Studio access).
+
+### Synapse troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `SqlServerRegionDoesNotAllowProvisioning`: "Location '…' is not accepting creation of new Windows Azure SQL Database servers for the subscription" | Every workspace contains a hidden SQL server, and Azure has no SQL capacity in that region for your subscription (common on student and trial subscriptions) | Set `synapse_location` in `infra/env/<env>.tfvars` to a region that accepts SQL servers; only the workspace moves, the lake stays put. Test a region first by creating and deleting an empty SQL server (free): `az sql server create -g rg-ingest-dev -n sqlprobe-$RANDOM -l <region> -u probeadmin -p '<strong password>'`. Or request region access: Help + support → Service and subscription limits (quotas) → SQL Database → Region access |
+| No SQL server in the resource group | Expected: serverless SQL is part of the workspace | Use the `-ondemand` endpoint (see above) |
+| Studio or SQL client can't connect | Your IP isn't in the workspace firewall, or it changed | Update `allowed_ip` and redeploy |
+| Studio: "You do not have the required permissions" | No Synapse RBAC role; Azure Owner isn't enough | Set `SYNAPSE_ADMIN_OBJECT_ID` (step 2) and redeploy |
+
+This project's dev workspace runs in `westus2`, because `eastus` and `eastus2` refused it. A
+workspace in a different region from its lake works; expect a little extra latency and egress cost.
+
 Full walkthrough: `../Week5-Azure-Synapse-Analytics-Tutorial.pdf`. That tutorial uses Bicep; this repo
-implements the same resources in Terraform.
+implements the same resources in Terraform. Its troubleshooting table doesn't cover the region error above.
 
 ## Roadmap
 
