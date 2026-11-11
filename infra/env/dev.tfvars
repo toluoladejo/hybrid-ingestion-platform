@@ -1,7 +1,7 @@
 env = "dev"
 
 outbox_path = "C:\\outbox"
-outbox_user = "OBASCONCEPTS\\adfreader" # run `hostname` in PowerShell
+outbox_user = "Obasconcepts\\adfreader" # run `hostname` in PowerShell
 
 # Synapse (week 5)
 # eastus and eastus2 refuse new SQL servers for this subscription (SqlServerRegionDoesNotAllowProvisioning)
