@@ -69,3 +69,10 @@ module "synapse" {
   reader_object_id      = var.reader_object_id
   deploy_spark          = var.deploy_spark
 }
+
+# Adopt a tr_landing_csv left behind by a failed apply (see var.import_landing_trigger).
+import {
+  for_each = var.import_landing_trigger ? toset(["tr_landing_csv"]) : toset([])
+  to       = module.adf.azurerm_data_factory_trigger_blob_event.landing
+  id       = "${module.adf.id}/triggers/${each.key}"
+}

@@ -57,3 +57,11 @@ variable "deploy_spark" {
   type    = bool
   default = false
 }
+
+# true when tr_landing_csv already exists in the factory but not in the Terraform state
+# (a failed apply created it and could not start it). Terraform then adopts it instead of
+# trying to create it again. Harmless to leave on once it is in the state.
+variable "import_landing_trigger" {
+  type    = bool
+  default = false
+}
