@@ -1,24 +1,41 @@
 #!/usr/bin/env bash
-# End-to-end test against dev (week 6): upload a sample, run the pipeline, wait for the result.
-# Needs: az login, `az extension add --name datafactory`, and the ADF pipeline from weeks 3-4.
+# End-to-end test against an environment (week 7): drop a good and a bad file in landing/ and
+# wait for tr_landing_csv -> pl_landing_to_curated to route them. No manual pipeline run:
+# the storage event trigger is what is being tested.
+#   good: curated/orders/ingest_date=<today>/<name>.parquet (and raw/orders/<name>.csv)
+#   bad:  quarantine/orders/<name>.csv
+# Needs: az login with Storage Blob Data Contributor on the account.
 set -euo pipefail
-RG=${RG:-rg-ingest-dev}
-ADF=${ADF:-adf-ingest-dev}
-PIPELINE=${PIPELINE:-pl_ingest}
-ACCOUNT=${ACCOUNT:?set ACCOUNT to the dev storage account name}
+ACCOUNT=${ACCOUNT:?set ACCOUNT to the storage account name (terraform output -raw storage_account_name)}
+TS=$(date +%s)
+GOOD="orders_it_${TS}.csv"
+BAD="orders_bad_it_${TS}.csv"
 
-az storage blob upload --account-name "$ACCOUNT" --container-name landing \
-    --name "it/orders_$(date +%s).csv" --file samples/orders.csv --auth-mode login --only-show-errors
+upload() {
+  az storage blob upload --account-name "$ACCOUNT" --container-name landing \
+      --name "it/$2" --file "$1" --auth-mode login --only-show-errors -o none
+}
 
-RUN_ID=$(az datafactory pipeline create-run -g "$RG" \
-    --factory-name "$ADF" --name "$PIPELINE" --query runId -o tsv)
-echo "run $RUN_ID"
-for _ in $(seq 1 30); do
-  STATUS=$(az datafactory pipeline-run show -g "$RG" \
-      --factory-name "$ADF" --run-id "$RUN_ID" --query status -o tsv)
-  echo "status: $STATUS"
-  case "$STATUS" in Succeeded) exit 0 ;; Failed|Cancelled) exit 1 ;; esac
-  sleep 20
-done
-echo "timed out" >&2
-exit 1
+exists() {
+  [ "$(az storage blob exists --account-name "$ACCOUNT" --container-name "$1" \
+        --name "$2" --auth-mode login --query exists -o tsv)" = "true" ]
+}
+
+wait_for() {
+  for _ in $(seq 1 30); do
+    if exists "$1" "$2"; then echo "ok: $1/$2"; return 0; fi
+    sleep 20
+  done
+  echo "timed out waiting for $1/$2" >&2
+  return 1
+}
+
+upload samples/orders.csv "$GOOD"
+upload samples/orders_bad.csv "$BAD"
+
+# The date is the pipeline's UTC run date; a run that crosses midnight lands in the next folder.
+wait_for curated "orders/ingest_date=$(date -u +%F)/${GOOD%.csv}.parquet"
+wait_for quarantine "orders/$BAD"
+exists raw "orders/$GOOD" || { echo "missing raw/orders/$GOOD" >&2; exit 1; }
+! exists landing "it/$GOOD" || { echo "landing/it/$GOOD was not removed" >&2; exit 1; }
+echo "integration test passed"

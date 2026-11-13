@@ -14,6 +14,10 @@ output "data_factory_name" {
   value = module.adf.name
 }
 
+output "curate_pipeline_name" {
+  value = module.adf.curate_pipeline_name
+}
+
 output "shir_auth_key" {
   value     = module.adf.shir_auth_key
   sensitive = true

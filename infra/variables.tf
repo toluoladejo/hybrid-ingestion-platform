@@ -41,12 +41,6 @@ variable "synapse_location" {
   EOT
 }
 
-variable "github_owner" {
-  type        = string
-  default     = ""
-  description = "GitHub owner of this repo. Set in dev.tfvars to link Synapse Studio to Git; leave empty in prod."
-}
-
 variable "allowed_ip" {
   type        = string
   default     = ""

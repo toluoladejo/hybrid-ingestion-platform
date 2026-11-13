@@ -207,7 +207,8 @@ cd "C:\Program Files\Microsoft Integration Runtime\5.0\Shared"
 1. Copy `samples/orders.csv` from the repo into `C:\outbox\`.
 2. ADF Studio, **Author**, Pipelines, `pl_outbox_to_landing`, **Debug** (or **Add trigger**, **Trigger now**; see below).
 3. Check:
-    - Storage account, `landing` container: `orders.csv` is there.
+    - Storage account, `landing` container: `orders.csv` is there. Once `tr_landing_csv` is deployed (weeks 4–5, `infra/modules/datafactory/curate.tf`),
+      the file only stays a few seconds: `pl_landing_to_curated` then moves it to `raw/orders/` (and writes Parquet to `curated/orders/`) or to `quarantine/orders/`.
     - `C:\outbox\orders.csv` is gone; `C:\outbox\archive\orders.csv` exists.
     - **Monitor** tab: the run is green and every activity succeeded.
 

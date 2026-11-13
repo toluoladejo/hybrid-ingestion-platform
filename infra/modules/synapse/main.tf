@@ -1,9 +1,9 @@
-# Week 5: Synapse workspace over the lake. Its pipeline (pl_curate) turns validated CSVs in
-# raw/orders/ into Parquet in curated/orders/; serverless SQL exposes them as dbo.orders.
+# Week 5: Synapse workspace over the lake. It moves no data: Data Factory writes curated
+# Parquet to curated/orders/ (pl_landing_to_curated), and the built-in serverless SQL pool
+# exposes it as ingest.dbo.orders (sql/serverless/).
 #
-# Terraform owns the workspace, its identity, firewall, lake roles, Git link and Spark pool.
-# Pipelines, datasets, linked services and triggers are Synapse artifacts: they live as JSON
-# under synapse/ in the repo and are published from Synapse Studio, not from Terraform.
+# Terraform owns the workspace, its identity, firewall, lake roles and optional Spark pool.
+# There are no Synapse pipelines, so the workspace has no Git link and nothing to Publish.
 
 # The workspace requires a SQL admin login even though we only use Entra ID day to day.
 # Generated here and kept only in (remote, RBAC-protected) state; read it with
@@ -39,17 +39,6 @@ resource "azurerm_synapse_workspace" "syn" {
   identity {
     type = "SystemAssigned"
   }
-
-  # Git integration in dev only: prod only ever receives published artifacts (week 7).
-  dynamic "github_repo" {
-    for_each = var.env == "dev" && var.github_owner != "" ? [1] : []
-    content {
-      account_name    = var.github_owner
-      repository_name = var.github_repo
-      branch_name     = var.collaboration_branch
-      root_folder     = "/synapse"
-    }
-  }
 }
 
 # ---------- Firewall ----------
@@ -73,7 +62,7 @@ resource "azurerm_synapse_firewall_rule" "me" {
 
 # ---------- Lake access (storage data plane) ----------
 
-# The workspace identity reads and writes the lake (pipelines, serverless credential).
+# The workspace identity reads the lake for the serverless credential (and Spark, if deployed).
 resource "azurerm_role_assignment" "syn_lake" {
   scope                = var.storage_account_id
   role_definition_name = "Storage Blob Data Contributor"

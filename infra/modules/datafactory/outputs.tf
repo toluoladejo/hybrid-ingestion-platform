@@ -19,3 +19,7 @@ output "shir_auth_key" {
   value     = azurerm_data_factory_integration_runtime_self_hosted.shir.primary_authorization_key
   sensitive = true
 }
+
+output "curate_pipeline_name" {
+  value = azurerm_data_factory_pipeline.curate.name
+}

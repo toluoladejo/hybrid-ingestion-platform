@@ -10,23 +10,6 @@ variable "storage_filesystem_id" {
   description = "DFS URL of the workspace's primary container, e.g. https://<account>.dfs.core.windows.net/synapse"
 }
 
-variable "github_owner" {
-  type        = string
-  default     = ""
-  description = "GitHub user or org. Set it (dev only) to link Synapse Studio to this repo."
-}
-
-variable "github_repo" {
-  type    = string
-  default = "hybrid-ingestion-platform"
-}
-
-variable "collaboration_branch" {
-  type        = string
-  default     = "main"
-  description = "Branch Synapse Studio publishes from."
-}
-
 variable "allowed_ip" {
   type        = string
   default     = ""
