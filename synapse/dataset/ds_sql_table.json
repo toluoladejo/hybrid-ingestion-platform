@@ -1,0 +1,33 @@
+{
+    "name": "ds_sql_table",
+    "properties": {
+        "linkedServiceName": {
+            "referenceName": "ls_sql_rto",
+            "type": "LinkedServiceReference"
+        },
+        "annotations": [],
+        "type": "AzureSqlTable",
+        "folder": {
+            "name": "RTO Modernization Test"
+        },
+        "schema": [],
+        "parameters": {
+            "SchemaName": {
+                "type": "string"
+            },
+            "TableName": {
+                "type": "string"
+            }
+        },
+        "typeProperties": {
+            "schema": {
+                "value": "@dataset().SchemaName",
+                "type": "Expression"
+            },
+            "table": {
+                "value": "@dataset().TableName",
+                "type": "Expression"
+            }
+        }
+    }
+}

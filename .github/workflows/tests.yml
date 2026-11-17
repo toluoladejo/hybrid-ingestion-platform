@@ -2,10 +2,10 @@ name: tests
 
 on:
   pull_request:
-    paths: ['pipelines/**', 'tests/**', 'samples/**', 'requirements-dev.txt']
+    paths: ['pipelines/**', 'tests/**', 'samples/**', 'synapse/**', 'requirements-dev.txt']
   push:
     branches: [main]
-    paths: ['pipelines/**', 'tests/**', 'samples/**', 'requirements-dev.txt']
+    paths: ['pipelines/**', 'tests/**', 'samples/**', 'synapse/**', 'requirements-dev.txt']
 
 permissions:
   contents: read

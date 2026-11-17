@@ -1,0 +1,34 @@
+{
+    "name": "tr_watermark_daily",
+    "properties": {
+        "description": "Daily schedule for the parent pipeline. Created STOPPED; start it only after debug runs pass. (The client has 8 triggers on their pipeline; this replica starts with one.)",
+        "annotations": [],
+        "runtimeState": "Stopped",
+        "pipelines": [
+            {
+                "pipelineReference": {
+                    "referenceName": "pl_watermark_incremental_parent",
+                    "type": "PipelineReference"
+                },
+                "parameters": {}
+            }
+        ],
+        "type": "ScheduleTrigger",
+        "typeProperties": {
+            "recurrence": {
+                "frequency": "Day",
+                "interval": 1,
+                "startTime": "2026-11-18T06:00:00Z",
+                "timeZone": "UTC",
+                "schedule": {
+                    "hours": [
+                        6
+                    ],
+                    "minutes": [
+                        0
+                    ]
+                }
+            }
+        }
+    }
+}

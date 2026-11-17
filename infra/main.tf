@@ -68,6 +68,21 @@ module "synapse" {
   allowed_ip            = var.allowed_ip
   reader_object_id      = var.reader_object_id
   deploy_spark          = var.deploy_spark
+  git_repo              = var.synapse_git_repo
+}
+
+# Watermark test (feature/watermark-incremental-test): control + simulated source DB for synapse/.
+# Same region as the workspace, because the default region refuses new SQL servers for this subscription.
+module "watermark_sql" {
+  count               = var.deploy_watermark_test ? 1 : 0
+  source              = "./modules/sqldb"
+  env                 = var.env
+  suffix              = local.suffix
+  resource_group_name = data.azurerm_resource_group.rg.name
+  location            = coalesce(var.synapse_location, local.location)
+  tags                = local.tags
+  admin_object_id     = var.reader_object_id
+  allowed_ip          = var.allowed_ip
 }
 
 # Adopt a tr_landing_csv left behind by a failed apply (see var.import_landing_trigger).

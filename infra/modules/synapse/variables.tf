@@ -26,3 +26,14 @@ variable "deploy_spark" {
   type    = bool
   default = false
 }
+
+variable "git_repo" {
+  type = object({
+    account_name    = string
+    repository_name = string
+    branch_name     = string
+    root_folder     = string
+  })
+  default     = null
+  description = "Optional GitHub link for Synapse Studio (watermark test). null = no link."
+}

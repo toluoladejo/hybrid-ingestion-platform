@@ -1,0 +1,714 @@
+{
+    "name": "pl_watermark_incremental_parent",
+    "properties": {
+        "description": "Test replica of the client's 'RTO Watermark Incremental' Synapse pipeline. Activity names and dependency conditions mirror the client canvas (screenshots 2026-11-17).",
+        "activities": [
+            {
+                "name": "Copy New Tables Metadata",
+                "type": "Copy",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "AzureSqlSource",
+                        "sqlReaderQuery": "SELECT SchemaName, TableName, WatermarkColumn, ApproxRowCount FROM etl.vw_SourceTableCatalog",
+                        "queryTimeout": "02:00:00",
+                        "partitionOption": "None"
+                    },
+                    "sink": {
+                        "type": "AzureSqlSink",
+                        "preCopyScript": "TRUNCATE TABLE etl.NewTablesStaging",
+                        "writeBehavior": "insert",
+                        "sqlWriterUseTableLock": false
+                    },
+                    "enableStaging": false,
+                    "translator": {
+                        "type": "TabularTranslator",
+                        "typeConversion": true,
+                        "typeConversionSettings": {
+                            "allowDataTruncation": true,
+                            "treatBooleanAsNumber": false
+                        }
+                    }
+                },
+                "inputs": [
+                    {
+                        "referenceName": "ds_sql_query",
+                        "type": "DatasetReference"
+                    }
+                ],
+                "outputs": [
+                    {
+                        "referenceName": "ds_sql_table",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "SchemaName": "etl",
+                            "TableName": "NewTablesStaging"
+                        }
+                    }
+                ]
+            },
+            {
+                "name": "Insert New Tables",
+                "type": "Lookup",
+                "dependsOn": [
+                    {
+                        "activity": "Copy New Tables Metadata",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "AzureSqlSource",
+                        "sqlReaderQuery": "EXEC etl.usp_InsertNewTables",
+                        "queryTimeout": "02:00:00",
+                        "partitionOption": "None"
+                    },
+                    "dataset": {
+                        "referenceName": "ds_sql_query",
+                        "type": "DatasetReference"
+                    },
+                    "firstRowOnly": true
+                }
+            },
+            {
+                "name": "Lookup1",
+                "type": "Lookup",
+                "dependsOn": [
+                    {
+                        "activity": "Insert New Tables",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "AzureSqlSource",
+                        "sqlReaderQuery": "SELECT ControlId, SchemaName, TableName, WatermarkColumn FROM etl.WatermarkControl WHERE IsActive = 1 AND LoadType = 'Incremental' AND IsLarge = 0",
+                        "queryTimeout": "02:00:00",
+                        "partitionOption": "None"
+                    },
+                    "dataset": {
+                        "referenceName": "ds_sql_query",
+                        "type": "DatasetReference"
+                    },
+                    "firstRowOnly": false
+                }
+            },
+            {
+                "name": "ForEach1",
+                "type": "ForEach",
+                "dependsOn": [
+                    {
+                        "activity": "Lookup1",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "items": {
+                        "value": "@activity('Lookup1').output.value",
+                        "type": "Expression"
+                    },
+                    "isSequential": false,
+                    "activities": [
+                        {
+                            "name": "Execute Pipeline1",
+                            "type": "ExecutePipeline",
+                            "dependsOn": [],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "pipeline": {
+                                    "referenceName": "pl_watermark_incremental_single",
+                                    "type": "PipelineReference"
+                                },
+                                "waitOnCompletion": true,
+                                "parameters": {
+                                    "ControlId": {
+                                        "value": "@item().ControlId",
+                                        "type": "Expression"
+                                    },
+                                    "SchemaName": {
+                                        "value": "@item().SchemaName",
+                                        "type": "Expression"
+                                    },
+                                    "TableName": {
+                                        "value": "@item().TableName",
+                                        "type": "Expression"
+                                    },
+                                    "WatermarkColumn": {
+                                        "value": "@item().WatermarkColumn",
+                                        "type": "Expression"
+                                    },
+                                    "ParentRunId": {
+                                        "value": "@pipeline().RunId",
+                                        "type": "Expression"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "Error Report Email",
+                            "type": "WebActivity",
+                            "dependsOn": [
+                                {
+                                    "activity": "Execute Pipeline1",
+                                    "dependencyConditions": [
+                                        "Failed"
+                                    ]
+                                }
+                            ],
+                            "policy": {
+                                "timeout": "0.12:00:00",
+                                "retry": 0,
+                                "retryIntervalInSeconds": 30,
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "method": "POST",
+                                "url": {
+                                    "value": "@pipeline().parameters.AlertWebhookUrl",
+                                    "type": "Expression"
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "body": {
+                                    "value": "@concat('{\"pipeline\":\"', pipeline().Pipeline, '\",\"runId\":\"', pipeline().RunId, '\",\"failedActivity\":\"Execute Pipeline1', '\",\"table\":\"', item().SchemaName, '.', item().TableName, '\",\"error\":\"', replace(string(activity('Execute Pipeline1').error.message), '\"', ''), '\"}')",
+                                    "type": "Expression"
+                                }
+                            }
+                        }
+                    ],
+                    "batchCount": 4
+                }
+            },
+            {
+                "name": "Lookup_Large_Tables",
+                "type": "Lookup",
+                "dependsOn": [
+                    {
+                        "activity": "ForEach1",
+                        "dependencyConditions": [
+                            "Completed"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "AzureSqlSource",
+                        "sqlReaderQuery": "SELECT ControlId, SchemaName, TableName, WatermarkColumn FROM etl.WatermarkControl WHERE IsActive = 1 AND LoadType = 'Incremental' AND IsLarge = 1",
+                        "queryTimeout": "02:00:00",
+                        "partitionOption": "None"
+                    },
+                    "dataset": {
+                        "referenceName": "ds_sql_query",
+                        "type": "DatasetReference"
+                    },
+                    "firstRowOnly": false
+                }
+            },
+            {
+                "name": "ForEach1_copy2",
+                "type": "ForEach",
+                "dependsOn": [
+                    {
+                        "activity": "Lookup_Large_Tables",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "items": {
+                        "value": "@activity('Lookup_Large_Tables').output.value",
+                        "type": "Expression"
+                    },
+                    "isSequential": true,
+                    "activities": [
+                        {
+                            "name": "Execute Pipeline1_copy2",
+                            "type": "ExecutePipeline",
+                            "dependsOn": [],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "pipeline": {
+                                    "referenceName": "pl_watermark_incremental_large",
+                                    "type": "PipelineReference"
+                                },
+                                "waitOnCompletion": true,
+                                "parameters": {
+                                    "ControlId": {
+                                        "value": "@item().ControlId",
+                                        "type": "Expression"
+                                    },
+                                    "SchemaName": {
+                                        "value": "@item().SchemaName",
+                                        "type": "Expression"
+                                    },
+                                    "TableName": {
+                                        "value": "@item().TableName",
+                                        "type": "Expression"
+                                    },
+                                    "WatermarkColumn": {
+                                        "value": "@item().WatermarkColumn",
+                                        "type": "Expression"
+                                    },
+                                    "ParentRunId": {
+                                        "value": "@pipeline().RunId",
+                                        "type": "Expression"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "Error Report Email copy2",
+                            "type": "WebActivity",
+                            "dependsOn": [
+                                {
+                                    "activity": "Execute Pipeline1_copy2",
+                                    "dependencyConditions": [
+                                        "Failed"
+                                    ]
+                                }
+                            ],
+                            "policy": {
+                                "timeout": "0.12:00:00",
+                                "retry": 0,
+                                "retryIntervalInSeconds": 30,
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "method": "POST",
+                                "url": {
+                                    "value": "@pipeline().parameters.AlertWebhookUrl",
+                                    "type": "Expression"
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "body": {
+                                    "value": "@concat('{\"pipeline\":\"', pipeline().Pipeline, '\",\"runId\":\"', pipeline().RunId, '\",\"failedActivity\":\"Execute Pipeline1_copy2', '\",\"table\":\"', item().SchemaName, '.', item().TableName, '\",\"error\":\"', replace(string(activity('Execute Pipeline1_copy2').error.message), '\"', ''), '\"}')",
+                                    "type": "Expression"
+                                }
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                "name": "Run Loop Static Load",
+                "type": "SynapseNotebook",
+                "dependsOn": [
+                    {
+                        "activity": "ForEach1_copy2",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "notebook": {
+                        "referenceName": "Run Loop Static Load",
+                        "type": "NotebookReference"
+                    },
+                    "parameters": {
+                        "sql_server": {
+                            "value": {
+                                "value": "@pipeline().parameters.SqlServer",
+                                "type": "Expression"
+                            },
+                            "type": "string"
+                        },
+                        "sql_database": {
+                            "value": {
+                                "value": "@pipeline().parameters.SqlDatabase",
+                                "type": "Expression"
+                            },
+                            "type": "string"
+                        },
+                        "storage_account": {
+                            "value": {
+                                "value": "@pipeline().parameters.StorageAccount",
+                                "type": "Expression"
+                            },
+                            "type": "string"
+                        },
+                        "container": {
+                            "value": {
+                                "value": "@pipeline().parameters.Container",
+                                "type": "Expression"
+                            },
+                            "type": "string"
+                        },
+                        "parent_run_id": {
+                            "value": {
+                                "value": "@pipeline().RunId",
+                                "type": "Expression"
+                            },
+                            "type": "string"
+                        }
+                    },
+                    "snapshot": true,
+                    "sparkPool": {
+                        "referenceName": "sparksmall",
+                        "type": "BigDataPoolReference"
+                    }
+                }
+            },
+            {
+                "name": "Error Report Email copy1",
+                "type": "WebActivity",
+                "dependsOn": [
+                    {
+                        "activity": "Run Loop Static Load",
+                        "dependencyConditions": [
+                            "Failed"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "method": "POST",
+                    "url": {
+                        "value": "@pipeline().parameters.AlertWebhookUrl",
+                        "type": "Expression"
+                    },
+                    "headers": {
+                        "Content-Type": "application/json"
+                    },
+                    "body": {
+                        "value": "@concat('{\"pipeline\":\"', pipeline().Pipeline, '\",\"runId\":\"', pipeline().RunId, '\",\"failedActivity\":\"Run Loop Static Load', '\",\"table\":\"n/a', '\",\"error\":\"', replace(string(activity('Run Loop Static Load').error.message), '\"', ''), '\"}')",
+                        "type": "Expression"
+                    }
+                }
+            },
+            {
+                "name": "Lookup1_copy1",
+                "type": "Lookup",
+                "dependsOn": [
+                    {
+                        "activity": "ForEach1_copy2",
+                        "dependencyConditions": [
+                            "Completed"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "AzureSqlSource",
+                        "sqlReaderQuery": "SELECT ControlId, SchemaName, TableName, WatermarkColumn FROM etl.WatermarkControl WHERE IsActive = 1 AND LoadType = 'Static'",
+                        "queryTimeout": "02:00:00",
+                        "partitionOption": "None"
+                    },
+                    "dataset": {
+                        "referenceName": "ds_sql_query",
+                        "type": "DatasetReference"
+                    },
+                    "firstRowOnly": false
+                },
+                "state": "Inactive",
+                "onInactiveMarkAs": "Succeeded"
+            },
+            {
+                "name": "ForEach1_copy1",
+                "type": "ForEach",
+                "dependsOn": [
+                    {
+                        "activity": "Lookup1_copy1",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "items": {
+                        "value": "@activity('Lookup1_copy1').output.value",
+                        "type": "Expression"
+                    },
+                    "isSequential": false,
+                    "activities": [
+                        {
+                            "name": "Execute Pipeline1_copy1",
+                            "type": "ExecutePipeline",
+                            "dependsOn": [],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "pipeline": {
+                                    "referenceName": "pl_static_load_child",
+                                    "type": "PipelineReference"
+                                },
+                                "waitOnCompletion": true,
+                                "parameters": {
+                                    "ControlId": {
+                                        "value": "@item().ControlId",
+                                        "type": "Expression"
+                                    },
+                                    "SchemaName": {
+                                        "value": "@item().SchemaName",
+                                        "type": "Expression"
+                                    },
+                                    "TableName": {
+                                        "value": "@item().TableName",
+                                        "type": "Expression"
+                                    },
+                                    "ParentRunId": {
+                                        "value": "@pipeline().RunId",
+                                        "type": "Expression"
+                                    }
+                                }
+                            }
+                        }
+                    ],
+                    "batchCount": 4
+                },
+                "state": "Inactive",
+                "onInactiveMarkAs": "Succeeded"
+            },
+            {
+                "name": "Notebook1",
+                "type": "SynapseNotebook",
+                "dependsOn": [
+                    {
+                        "activity": "Run Loop Static Load",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    },
+                    {
+                        "activity": "ForEach1_copy1",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "notebook": {
+                        "referenceName": "Notebook1",
+                        "type": "NotebookReference"
+                    },
+                    "parameters": {
+                        "sql_server": {
+                            "value": {
+                                "value": "@pipeline().parameters.SqlServer",
+                                "type": "Expression"
+                            },
+                            "type": "string"
+                        },
+                        "sql_database": {
+                            "value": {
+                                "value": "@pipeline().parameters.SqlDatabase",
+                                "type": "Expression"
+                            },
+                            "type": "string"
+                        },
+                        "storage_account": {
+                            "value": {
+                                "value": "@pipeline().parameters.StorageAccount",
+                                "type": "Expression"
+                            },
+                            "type": "string"
+                        },
+                        "container": {
+                            "value": {
+                                "value": "@pipeline().parameters.Container",
+                                "type": "Expression"
+                            },
+                            "type": "string"
+                        },
+                        "parent_run_id": {
+                            "value": {
+                                "value": "@pipeline().RunId",
+                                "type": "Expression"
+                            },
+                            "type": "string"
+                        }
+                    },
+                    "snapshot": true,
+                    "sparkPool": {
+                        "referenceName": "sparksmall",
+                        "type": "BigDataPoolReference"
+                    }
+                }
+            },
+            {
+                "name": "Lookup Row Counts",
+                "type": "Lookup",
+                "dependsOn": [
+                    {
+                        "activity": "Notebook1",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "AzureSqlSource",
+                        "sqlReaderQuery": {
+                            "value": "@concat('SELECT ISNULL(SUM(RowsCopied), 0) AS TotalRows, COUNT(*) AS TablesLoaded FROM etl.LoadAudit WHERE LoadKind IN (''Incremental'', ''Large'') AND ParentRunId = ''', pipeline().RunId, '''')",
+                            "type": "Expression"
+                        },
+                        "queryTimeout": "02:00:00",
+                        "partitionOption": "None"
+                    },
+                    "dataset": {
+                        "referenceName": "ds_sql_query",
+                        "type": "DatasetReference"
+                    },
+                    "firstRowOnly": true
+                }
+            },
+            {
+                "name": "If Condition1",
+                "type": "IfCondition",
+                "dependsOn": [
+                    {
+                        "activity": "Lookup Row Counts",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "expression": {
+                        "value": "@greater(int(activity('Lookup Row Counts').output.firstRow.TotalRows), 0)",
+                        "type": "Expression"
+                    },
+                    "ifTrueActivities": [
+                        {
+                            "name": "Execute Archiving",
+                            "type": "ExecutePipeline",
+                            "dependsOn": [],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "pipeline": {
+                                    "referenceName": "pl_archiving",
+                                    "type": "PipelineReference"
+                                },
+                                "waitOnCompletion": true,
+                                "parameters": {
+                                    "ParentRunId": {
+                                        "value": "@pipeline().RunId",
+                                        "type": "Expression"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        ],
+        "parameters": {
+            "AlertWebhookUrl": {
+                "type": "string",
+                "defaultValue": "__ALERT_URL__"
+            },
+            "SqlServer": {
+                "type": "string",
+                "defaultValue": "__SQL_SERVER__.database.windows.net"
+            },
+            "SqlDatabase": {
+                "type": "string",
+                "defaultValue": "__SQL_DB__"
+            },
+            "StorageAccount": {
+                "type": "string",
+                "defaultValue": "__STORAGE_ACCOUNT__"
+            },
+            "Container": {
+                "type": "string",
+                "defaultValue": "synapse"
+            }
+        },
+        "folder": {
+            "name": "RTO Modernization Test"
+        },
+        "annotations": [
+            "replica",
+            "test"
+        ]
+    }
+}

@@ -1,0 +1,129 @@
+{
+    "name": "pl_static_load_child",
+    "properties": {
+        "description": "Pipeline-based full load of one static table. Used only by the DEACTIVATED ForEach1_copy1 branch.",
+        "activities": [
+            {
+                "name": "Full copy",
+                "type": "Copy",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "AzureSqlSource",
+                        "sqlReaderQuery": {
+                            "value": "@concat('SELECT * FROM ', '[', pipeline().parameters.SchemaName, '].[', pipeline().parameters.TableName, ']')",
+                            "type": "Expression"
+                        },
+                        "queryTimeout": "02:00:00",
+                        "partitionOption": "None"
+                    },
+                    "sink": {
+                        "type": "ParquetSink",
+                        "storeSettings": {
+                            "type": "AzureBlobFSWriteSettings"
+                        },
+                        "formatSettings": {
+                            "type": "ParquetWriteSettings"
+                        }
+                    },
+                    "enableStaging": false
+                },
+                "inputs": [
+                    {
+                        "referenceName": "ds_sql_query",
+                        "type": "DatasetReference"
+                    }
+                ],
+                "outputs": [
+                    {
+                        "referenceName": "ds_adls_parquet",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "FolderPath": {
+                                "value": "@concat('raw/static/', pipeline().parameters.SchemaName, '_', pipeline().parameters.TableName)",
+                                "type": "Expression"
+                            },
+                            "FileName": "full.parquet"
+                        }
+                    }
+                ]
+            },
+            {
+                "name": "Record static load",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "Full copy",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "linkedServiceName": {
+                    "referenceName": "ls_sql_rto",
+                    "type": "LinkedServiceReference"
+                },
+                "typeProperties": {
+                    "storedProcedureName": "[etl].[usp_RecordStaticLoad]",
+                    "storedProcedureParameters": {
+                        "ControlId": {
+                            "value": {
+                                "value": "@pipeline().parameters.ControlId",
+                                "type": "Expression"
+                            },
+                            "type": "Int32"
+                        },
+                        "RowsCopied": {
+                            "value": {
+                                "value": "@activity('Full copy').output.rowsCopied",
+                                "type": "Expression"
+                            },
+                            "type": "Int64"
+                        },
+                        "ParentRunId": {
+                            "value": {
+                                "value": "@pipeline().parameters.ParentRunId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        }
+                    }
+                }
+            }
+        ],
+        "parameters": {
+            "ControlId": {
+                "type": "int"
+            },
+            "SchemaName": {
+                "type": "string"
+            },
+            "TableName": {
+                "type": "string"
+            },
+            "ParentRunId": {
+                "type": "string"
+            }
+        },
+        "folder": {
+            "name": "RTO Modernization Test"
+        },
+        "annotations": []
+    }
+}

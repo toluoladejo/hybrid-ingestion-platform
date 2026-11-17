@@ -58,6 +58,30 @@ variable "deploy_spark" {
   default = false
 }
 
+# ---------- Watermark test (synapse/, sql/watermark/) ----------
+
+variable "deploy_watermark_test" {
+  type        = bool
+  default     = false
+  description = "Deploy the Azure SQL DB used by the synapse/ watermark pipeline replica."
+
+  validation {
+    condition     = !var.deploy_watermark_test || (var.deploy_spark && var.reader_object_id != "")
+    error_message = "deploy_watermark_test needs deploy_spark = true (the notebooks run on sparksmall) and reader_object_id set (it becomes the SQL Entra admin)."
+  }
+}
+
+variable "synapse_git_repo" {
+  type = object({
+    account_name    = string
+    repository_name = string
+    branch_name     = string
+    root_folder     = optional(string, "/synapse")
+  })
+  default     = null
+  description = "GitHub link for Synapse Studio. branch_name is the collaboration branch; Debug from any branch."
+}
+
 # true when tr_landing_csv already exists in the factory but not in the Terraform state
 # (a failed apply created it and could not start it). Terraform then adopts it instead of
 # trying to create it again. Harmless to leave on once it is in the state.

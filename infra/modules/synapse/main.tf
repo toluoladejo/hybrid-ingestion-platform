@@ -3,7 +3,9 @@
 # exposes it as ingest.dbo.orders (sql/serverless/).
 #
 # Terraform owns the workspace, its identity, firewall, lake roles and optional Spark pool.
-# There are no Synapse pipelines, so the workspace has no Git link and nothing to Publish.
+# The platform itself runs no Synapse pipelines. The one exception is the watermark test
+# (synapse/ at the repo root), which needs the optional Git link below (var.git_repo).
+# Set the link here, not in Studio: Terraform would remove a link it doesn't know about.
 
 # The workspace requires a SQL admin login even though we only use Entra ID day to day.
 # Generated here and kept only in (remote, RBAC-protected) state; read it with
@@ -38,6 +40,18 @@ resource "azurerm_synapse_workspace" "syn" {
 
   identity {
     type = "SystemAssigned"
+  }
+
+  # Studio then reads and writes synapse/ in GitHub. The first time you open Studio it asks
+  # you to authorise GitHub. Debug runs work from any branch without publishing.
+  dynamic "github_repo" {
+    for_each = var.git_repo == null ? [] : [var.git_repo]
+    content {
+      account_name    = github_repo.value.account_name
+      repository_name = github_repo.value.repository_name
+      branch_name     = github_repo.value.branch_name
+      root_folder     = github_repo.value.root_folder
+    }
   }
 }
 
