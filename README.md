@@ -43,6 +43,9 @@ All of it: Terraform + GitHub Actions (OIDC) ── PR plan ──► dev ──
 | `pipelines/validate.py` | Full validation rules (stricter than the pipeline's), run by the data-quality tests |
 | `tests/` | `pytest` tests and `integration.sh` (drops files in `landing/` and checks where they end up) |
 | `samples/` | A good and a bad sample file |
+| `synapse/`, `sql/watermark/` | **Watermark test** (branch `feature/watermark-incremental-test`): Synapse replica of a client's watermark incremental pipeline, with its SQL. See `docs/watermark-test-guide.md` |
+| `infra/modules/sqldb/` | Azure SQL DB for the watermark test, only when `deploy_watermark_test = true` |
+| `scripts/configure-watermark.sh` | Writes this environment's resource names into `synapse/` and `sql/watermark/` |
 | `scripts/bootstrap.sh` | One-time setup: resource groups, Terraform state storage, OIDC app, repo variables, environments |
 
 ## Getting started
@@ -148,6 +151,15 @@ Full walkthrough: `../Week5-Azure-Synapse-Analytics-Tutorial.pdf`. That tutorial
 implements the same resources in Terraform. The tutorial builds `pl_curate` as a Synapse pipeline; this repo
 runs that step in ADF instead (`CurateToParquet` in `pl_landing_to_curated`), so skip its Studio Publish steps.
 Its troubleshooting table doesn't cover the region error above.
+
+## Watermark incremental test (side project)
+
+`synapse/` holds a Synapse replica of a client's metadata-driven **watermark incremental** pipeline
+(19 activities: new-table discovery, standard and large incremental loops with per-table alerts,
+Spark static load, reconciliation, conditional archiving). It runs on this platform's workspace
+and lake, with synthetic data in an optional Azure SQL DB. It is the one exception to
+"Synapse runs no pipelines". Everything is off by default (`deploy_watermark_test = false`).
+Setup and test scenarios: [`docs/watermark-test-guide.md`](docs/watermark-test-guide.md).
 
 ## Roadmap
 

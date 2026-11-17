@@ -1,0 +1,29 @@
+{
+    "name": "ds_adls_binary",
+    "properties": {
+        "linkedServiceName": {
+            "referenceName": "ls_adls_lake",
+            "type": "LinkedServiceReference"
+        },
+        "annotations": [],
+        "type": "Binary",
+        "folder": {
+            "name": "RTO Modernization Test"
+        },
+        "parameters": {
+            "FolderPath": {
+                "type": "string"
+            }
+        },
+        "typeProperties": {
+            "location": {
+                "type": "AzureBlobFSLocation",
+                "folderPath": {
+                    "value": "@dataset().FolderPath",
+                    "type": "Expression"
+                },
+                "fileSystem": "synapse"
+            }
+        }
+    }
+}

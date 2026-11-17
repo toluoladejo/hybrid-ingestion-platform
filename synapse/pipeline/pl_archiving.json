@@ -1,0 +1,114 @@
+{
+    "name": "pl_archiving",
+    "properties": {
+        "description": "Archiving step called by If Condition1 (True). Copies raw/incremental to a timestamped archive folder and logs it.",
+        "activities": [
+            {
+                "name": "Copy raw to archive",
+                "type": "Copy",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "BinarySource",
+                        "storeSettings": {
+                            "type": "AzureBlobFSReadSettings",
+                            "recursive": true
+                        },
+                        "formatSettings": {
+                            "type": "BinaryReadSettings"
+                        }
+                    },
+                    "sink": {
+                        "type": "BinarySink",
+                        "storeSettings": {
+                            "type": "AzureBlobFSWriteSettings",
+                            "copyBehavior": "PreserveHierarchy"
+                        }
+                    },
+                    "enableStaging": false
+                },
+                "inputs": [
+                    {
+                        "referenceName": "ds_adls_binary",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "FolderPath": "raw/incremental"
+                        }
+                    }
+                ],
+                "outputs": [
+                    {
+                        "referenceName": "ds_adls_binary",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "FolderPath": {
+                                "value": "@concat('archive/', formatDateTime(utcnow(), 'yyyyMMdd_HHmm'))",
+                                "type": "Expression"
+                            }
+                        }
+                    }
+                ]
+            },
+            {
+                "name": "Log archive",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "Copy raw to archive",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "linkedServiceName": {
+                    "referenceName": "ls_sql_rto",
+                    "type": "LinkedServiceReference"
+                },
+                "typeProperties": {
+                    "storedProcedureName": "[etl].[usp_LogArchive]",
+                    "storedProcedureParameters": {
+                        "ParentRunId": {
+                            "value": {
+                                "value": "@pipeline().parameters.ParentRunId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "FilesCopied": {
+                            "value": {
+                                "value": "@activity('Copy raw to archive').output.filesWritten",
+                                "type": "Expression"
+                            },
+                            "type": "Int64"
+                        }
+                    }
+                }
+            }
+        ],
+        "parameters": {
+            "ParentRunId": {
+                "type": "string"
+            }
+        },
+        "folder": {
+            "name": "RTO Modernization Test"
+        },
+        "annotations": []
+    }
+}

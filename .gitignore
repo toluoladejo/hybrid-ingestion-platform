@@ -8,3 +8,4 @@ __pycache__/
 *.tfplan
 crash.log
 .env
+watermark.env

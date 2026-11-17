@@ -35,3 +35,12 @@ output "synapse_sql_admin_password" {
   value     = module.synapse.sql_admin_password
   sensitive = true
 }
+
+# Watermark test (null unless deploy_watermark_test = true). Read by scripts/configure-watermark.sh.
+output "watermark_sql_server_name" {
+  value = one(module.watermark_sql[*].server_name)
+}
+
+output "watermark_sql_database" {
+  value = one(module.watermark_sql[*].database_name)
+}

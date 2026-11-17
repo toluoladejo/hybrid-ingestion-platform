@@ -1,0 +1,138 @@
+{
+    "name": "Notebook1",
+    "properties": {
+        "folder": {
+            "name": "RTO Modernization Test"
+        },
+        "nbformat": 4,
+        "nbformat_minor": 2,
+        "bigDataPool": {
+            "referenceName": "sparksmall",
+            "type": "BigDataPoolReference"
+        },
+        "sessionProperties": {
+            "driverMemory": "28g",
+            "driverCores": 4,
+            "executorMemory": "28g",
+            "executorCores": 4,
+            "numExecutors": 2,
+            "conf": {
+                "spark.dynamicAllocation.enabled": "false",
+                "spark.dynamicAllocation.minExecutors": "2",
+                "spark.dynamicAllocation.maxExecutors": "2"
+            }
+        },
+        "metadata": {
+            "saveOutput": true,
+            "enableDebugMode": false,
+            "kernelspec": {
+                "name": "synapse_pyspark",
+                "display_name": "Synapse PySpark"
+            },
+            "language_info": {
+                "name": "python"
+            }
+        },
+        "cells": [
+            {
+                "cell_type": "markdown",
+                "metadata": {},
+                "source": [
+                    "# Notebook1 (post-processing)\nReconciles rows copied vs rows landed in the lake for this parent run and records the result in `etl.LoadAudit`. Name kept as the client's default."
+                ]
+            },
+            {
+                "cell_type": "code",
+                "metadata": {
+                    "tags": [
+                        "parameters"
+                    ]
+                },
+                "source": [
+                    "sql_server = \"__SQL_SERVER__.database.windows.net\"\n",
+                    "sql_database = \"__SQL_DB__\"\n",
+                    "storage_account = \"__STORAGE_ACCOUNT__\"\n",
+                    "container = \"synapse\"\n",
+                    "parent_run_id = \"interactive\""
+                ],
+                "outputs": [],
+                "execution_count": null
+            },
+            {
+                "cell_type": "code",
+                "metadata": {},
+                "source": [
+                    "import json\n",
+                    "from notebookutils import mssparkutils\n",
+                    "\n",
+                    "# Token for Azure SQL (audience https://database.windows.net/). In a pipeline run this is the\n",
+                    "# workspace managed identity; when run interactively it is your own identity.\n",
+                    "token = mssparkutils.credentials.getToken(\"DW\")\n",
+                    "jdbc_url = (f\"jdbc:sqlserver://{sql_server}:1433;database={sql_database};encrypt=true;\"\n",
+                    "            \"trustServerCertificate=false;hostNameInCertificate=*.database.windows.net;loginTimeout=30\")\n",
+                    "lake = f\"abfss://{container}@{storage_account}.dfs.core.windows.net\"\n",
+                    "\n",
+                    "\n",
+                    "def read_sql(query):\n",
+                    "    return (spark.read.format(\"jdbc\")\n",
+                    "            .option(\"url\", jdbc_url)\n",
+                    "            .option(\"driver\", \"com.microsoft.sqlserver.jdbc.SQLServerDriver\")\n",
+                    "            .option(\"accessToken\", token)\n",
+                    "            .option(\"query\", query)\n",
+                    "            .load())\n",
+                    "\n",
+                    "\n",
+                    "def exec_sql(statement):\n",
+                    "    \"\"\"Run a non-query statement (EXEC / UPDATE) over plain JDBC.\"\"\"\n",
+                    "    jvm = spark.sparkContext._gateway.jvm\n",
+                    "    jvm.java.lang.Class.forName(\"com.microsoft.sqlserver.jdbc.SQLServerDriver\")\n",
+                    "    props = jvm.java.util.Properties()\n",
+                    "    props.setProperty(\"accessToken\", token)\n",
+                    "    conn = jvm.java.sql.DriverManager.getConnection(jdbc_url, props)\n",
+                    "    try:\n",
+                    "        stmt = conn.createStatement()\n",
+                    "        stmt.execute(statement)\n",
+                    "        stmt.close()\n",
+                    "    finally:\n",
+                    "        conn.close()"
+                ],
+                "outputs": [],
+                "execution_count": null
+            },
+            {
+                "cell_type": "code",
+                "metadata": {},
+                "source": [
+                    "# Post-processing / reconciliation: for every table loaded in this parent run, count the rows that\n",
+                    "# actually landed in the lake and write the result back to etl.LoadAudit.\n",
+                    "audit = read_sql(\n",
+                    "    \"SELECT AuditId, SchemaName, TableName, LoadKind, RowsCopied, ChildRunId FROM etl.LoadAudit \"\n",
+                    "    f\"WHERE ParentRunId = '{parent_run_id}'\"\n",
+                    ").collect()\n",
+                    "\n",
+                    "mismatches = []\n",
+                    "for a in audit:\n",
+                    "    base = f\"{a.SchemaName}_{a.TableName}\"\n",
+                    "    if a.LoadKind == \"Static\":\n",
+                    "        path = f\"{lake}/raw/static/{base}\"\n",
+                    "    else:\n",
+                    "        path = f\"{lake}/raw/incremental/{base}/*/*/*/{a.ChildRunId}.parquet\"\n",
+                    "    try:\n",
+                    "        lake_rows = spark.read.parquet(path).count()\n",
+                    "    except Exception:\n",
+                    "        lake_rows = 0  # no file written (e.g. zero-row delta)\n",
+                    "    ok = int(lake_rows == (a.RowsCopied or 0))\n",
+                    "    exec_sql(f\"UPDATE etl.LoadAudit SET LakeRowCount = {lake_rows}, Validated = {ok} WHERE AuditId = {a.AuditId}\")\n",
+                    "    if not ok:\n",
+                    "        mismatches.append((base, a.RowsCopied, lake_rows))\n",
+                    "    print(f\"{'OK ' if ok else 'BAD'} {a.LoadKind:<11} {base}: copied={a.RowsCopied} lake={lake_rows}\")\n",
+                    "\n",
+                    "print(f\"{len(audit)} audit rows checked, {len(mismatches)} mismatches\")\n",
+                    "mssparkutils.notebook.exit(json.dumps({\"checked\": len(audit), \"mismatches\": len(mismatches)}))"
+                ],
+                "outputs": [],
+                "execution_count": null
+            }
+        ]
+    }
+}

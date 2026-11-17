@@ -1,0 +1,137 @@
+{
+    "name": "Run Loop Static Load",
+    "properties": {
+        "folder": {
+            "name": "RTO Modernization Test"
+        },
+        "nbformat": 4,
+        "nbformat_minor": 2,
+        "bigDataPool": {
+            "referenceName": "sparksmall",
+            "type": "BigDataPoolReference"
+        },
+        "sessionProperties": {
+            "driverMemory": "28g",
+            "driverCores": 4,
+            "executorMemory": "28g",
+            "executorCores": 4,
+            "numExecutors": 2,
+            "conf": {
+                "spark.dynamicAllocation.enabled": "false",
+                "spark.dynamicAllocation.minExecutors": "2",
+                "spark.dynamicAllocation.maxExecutors": "2"
+            }
+        },
+        "metadata": {
+            "saveOutput": true,
+            "enableDebugMode": false,
+            "kernelspec": {
+                "name": "synapse_pyspark",
+                "display_name": "Synapse PySpark"
+            },
+            "language_info": {
+                "name": "python"
+            }
+        },
+        "cells": [
+            {
+                "cell_type": "markdown",
+                "metadata": {},
+                "source": [
+                    "# Run Loop Static Load\nFull reload of every `LoadType = 'Static'` table (no watermark column) into `raw/static/`. Raises at the end if any table failed so the pipeline's `Error Report Email copy1` path fires."
+                ]
+            },
+            {
+                "cell_type": "code",
+                "metadata": {
+                    "tags": [
+                        "parameters"
+                    ]
+                },
+                "source": [
+                    "sql_server = \"__SQL_SERVER__.database.windows.net\"\n",
+                    "sql_database = \"__SQL_DB__\"\n",
+                    "storage_account = \"__STORAGE_ACCOUNT__\"\n",
+                    "container = \"synapse\"\n",
+                    "parent_run_id = \"interactive\""
+                ],
+                "outputs": [],
+                "execution_count": null
+            },
+            {
+                "cell_type": "code",
+                "metadata": {},
+                "source": [
+                    "import json\n",
+                    "from notebookutils import mssparkutils\n",
+                    "\n",
+                    "# Token for Azure SQL (audience https://database.windows.net/). In a pipeline run this is the\n",
+                    "# workspace managed identity; when run interactively it is your own identity.\n",
+                    "token = mssparkutils.credentials.getToken(\"DW\")\n",
+                    "jdbc_url = (f\"jdbc:sqlserver://{sql_server}:1433;database={sql_database};encrypt=true;\"\n",
+                    "            \"trustServerCertificate=false;hostNameInCertificate=*.database.windows.net;loginTimeout=30\")\n",
+                    "lake = f\"abfss://{container}@{storage_account}.dfs.core.windows.net\"\n",
+                    "\n",
+                    "\n",
+                    "def read_sql(query):\n",
+                    "    return (spark.read.format(\"jdbc\")\n",
+                    "            .option(\"url\", jdbc_url)\n",
+                    "            .option(\"driver\", \"com.microsoft.sqlserver.jdbc.SQLServerDriver\")\n",
+                    "            .option(\"accessToken\", token)\n",
+                    "            .option(\"query\", query)\n",
+                    "            .load())\n",
+                    "\n",
+                    "\n",
+                    "def exec_sql(statement):\n",
+                    "    \"\"\"Run a non-query statement (EXEC / UPDATE) over plain JDBC.\"\"\"\n",
+                    "    jvm = spark.sparkContext._gateway.jvm\n",
+                    "    jvm.java.lang.Class.forName(\"com.microsoft.sqlserver.jdbc.SQLServerDriver\")\n",
+                    "    props = jvm.java.util.Properties()\n",
+                    "    props.setProperty(\"accessToken\", token)\n",
+                    "    conn = jvm.java.sql.DriverManager.getConnection(jdbc_url, props)\n",
+                    "    try:\n",
+                    "        stmt = conn.createStatement()\n",
+                    "        stmt.execute(statement)\n",
+                    "        stmt.close()\n",
+                    "    finally:\n",
+                    "        conn.close()"
+                ],
+                "outputs": [],
+                "execution_count": null
+            },
+            {
+                "cell_type": "code",
+                "metadata": {},
+                "source": [
+                    "tables = read_sql(\n",
+                    "    \"SELECT ControlId, SchemaName, TableName FROM etl.WatermarkControl \"\n",
+                    "    \"WHERE IsActive = 1 AND LoadType = 'Static'\"\n",
+                    ").collect()\n",
+                    "\n",
+                    "loaded, failures = [], []\n",
+                    "for t in tables:\n",
+                    "    full_name = f\"[{t.SchemaName}].[{t.TableName}]\"\n",
+                    "    try:\n",
+                    "        df = read_sql(f\"SELECT * FROM {full_name}\").cache()\n",
+                    "        rows = df.count()\n",
+                    "        df.write.mode(\"overwrite\").parquet(f\"{lake}/raw/static/{t.SchemaName}_{t.TableName}\")\n",
+                    "        df.unpersist()\n",
+                    "        exec_sql(f\"EXEC etl.usp_RecordStaticLoad @ControlId = {t.ControlId}, \"\n",
+                    "                 f\"@RowsCopied = {rows}, @ParentRunId = '{parent_run_id}'\")\n",
+                    "        loaded.append((full_name, rows))\n",
+                    "        print(f\"OK   {full_name}: {rows} rows\")\n",
+                    "    except Exception as e:  # keep looping, fail at the end so the pipeline's failure path fires\n",
+                    "        failures.append((full_name, str(e)[:400]))\n",
+                    "        print(f\"FAIL {full_name}: {e}\")\n",
+                    "\n",
+                    "if failures:\n",
+                    "    raise Exception(f\"Static load failed for {len(failures)} table(s): {failures}\")\n",
+                    "\n",
+                    "mssparkutils.notebook.exit(json.dumps({\"tablesLoaded\": len(loaded), \"rows\": sum(r for _, r in loaded)}))"
+                ],
+                "outputs": [],
+                "execution_count": null
+            }
+        ]
+    }
+}

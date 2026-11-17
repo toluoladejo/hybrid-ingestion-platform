@@ -1,0 +1,233 @@
+{
+    "name": "pl_watermark_incremental_single",
+    "properties": {
+        "description": "Per-table watermark delta copy (Incremental). Called by the parent's ForEach.",
+        "activities": [
+            {
+                "name": "OldWatermark",
+                "type": "Lookup",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "AzureSqlSource",
+                        "sqlReaderQuery": {
+                            "value": "@concat('SELECT WatermarkValue FROM etl.WatermarkControl WHERE ControlId = ', string(pipeline().parameters.ControlId))",
+                            "type": "Expression"
+                        },
+                        "queryTimeout": "02:00:00",
+                        "partitionOption": "None"
+                    },
+                    "dataset": {
+                        "referenceName": "ds_sql_query",
+                        "type": "DatasetReference"
+                    },
+                    "firstRowOnly": true
+                }
+            },
+            {
+                "name": "NewWatermark",
+                "type": "Lookup",
+                "dependsOn": [
+                    {
+                        "activity": "OldWatermark",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "AzureSqlSource",
+                        "sqlReaderQuery": {
+                            "value": "@concat('SELECT CONVERT(varchar(27), ISNULL(MAX(', '[', pipeline().parameters.WatermarkColumn, ']', '), CAST(''', activity('OldWatermark').output.firstRow.WatermarkValue, ''' AS datetime2)), 121) AS NewWatermarkValue FROM ', '[', pipeline().parameters.SchemaName, '].[', pipeline().parameters.TableName, ']')",
+                            "type": "Expression"
+                        },
+                        "queryTimeout": "02:00:00",
+                        "partitionOption": "None"
+                    },
+                    "dataset": {
+                        "referenceName": "ds_sql_query",
+                        "type": "DatasetReference"
+                    },
+                    "firstRowOnly": true
+                }
+            },
+            {
+                "name": "Delta copy",
+                "type": "Copy",
+                "dependsOn": [
+                    {
+                        "activity": "NewWatermark",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "AzureSqlSource",
+                        "sqlReaderQuery": {
+                            "value": "@concat('SELECT * FROM ', '[', pipeline().parameters.SchemaName, '].[', pipeline().parameters.TableName, ']', ' WHERE ', '[', pipeline().parameters.WatermarkColumn, ']', ' > CAST(''', activity('OldWatermark').output.firstRow.WatermarkValue, ''' AS datetime2) AND ', '[', pipeline().parameters.WatermarkColumn, ']', ' <= CAST(''', activity('NewWatermark').output.firstRow.NewWatermarkValue, ''' AS datetime2)')",
+                            "type": "Expression"
+                        },
+                        "queryTimeout": "02:00:00",
+                        "partitionOption": "None"
+                    },
+                    "sink": {
+                        "type": "ParquetSink",
+                        "storeSettings": {
+                            "type": "AzureBlobFSWriteSettings"
+                        },
+                        "formatSettings": {
+                            "type": "ParquetWriteSettings"
+                        }
+                    },
+                    "enableStaging": false,
+                    "translator": {
+                        "type": "TabularTranslator",
+                        "typeConversion": true,
+                        "typeConversionSettings": {
+                            "allowDataTruncation": true,
+                            "treatBooleanAsNumber": false
+                        }
+                    }
+                },
+                "inputs": [
+                    {
+                        "referenceName": "ds_sql_query",
+                        "type": "DatasetReference"
+                    }
+                ],
+                "outputs": [
+                    {
+                        "referenceName": "ds_adls_parquet",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "FolderPath": {
+                                "value": "@concat('raw/incremental/', pipeline().parameters.SchemaName, '_', pipeline().parameters.TableName, '/', formatDateTime(utcnow(), 'yyyy/MM/dd'))",
+                                "type": "Expression"
+                            },
+                            "FileName": {
+                                "value": "@concat(pipeline().RunId, '.parquet')",
+                                "type": "Expression"
+                            }
+                        }
+                    }
+                ]
+            },
+            {
+                "name": "Update watermark",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "Delta copy",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "linkedServiceName": {
+                    "referenceName": "ls_sql_rto",
+                    "type": "LinkedServiceReference"
+                },
+                "typeProperties": {
+                    "storedProcedureName": "[etl].[usp_UpdateWatermark]",
+                    "storedProcedureParameters": {
+                        "ControlId": {
+                            "value": {
+                                "value": "@pipeline().parameters.ControlId",
+                                "type": "Expression"
+                            },
+                            "type": "Int32"
+                        },
+                        "NewWatermark": {
+                            "value": {
+                                "value": "@activity('NewWatermark').output.firstRow.NewWatermarkValue",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "RowsCopied": {
+                            "value": {
+                                "value": "@activity('Delta copy').output.rowsCopied",
+                                "type": "Expression"
+                            },
+                            "type": "Int64"
+                        },
+                        "ParentRunId": {
+                            "value": {
+                                "value": "@pipeline().parameters.ParentRunId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "ChildRunId": {
+                            "value": {
+                                "value": "@pipeline().RunId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "LoadKind": {
+                            "value": "Incremental",
+                            "type": "String"
+                        }
+                    }
+                }
+            }
+        ],
+        "parameters": {
+            "ControlId": {
+                "type": "int"
+            },
+            "SchemaName": {
+                "type": "string"
+            },
+            "TableName": {
+                "type": "string"
+            },
+            "WatermarkColumn": {
+                "type": "string"
+            },
+            "ParentRunId": {
+                "type": "string"
+            }
+        },
+        "folder": {
+            "name": "RTO Modernization Test"
+        },
+        "annotations": []
+    }
+}
