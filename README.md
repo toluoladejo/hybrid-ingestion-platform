@@ -1,7 +1,7 @@
 # Hybrid File Ingestion Platform
 
 Portfolio project for the *Azure Data Platform & DevOps 8-week learning plan*
-(`../Azure-Data-Platform-Learning-Plan.pdf`).
+(`Azure-Data-Platform-Learning-Plan.pdf`, course material kept outside this repo).
 
 A simulated on-prem server drops CSV files. They are copied to Azure Storage,
 trigger a Data Factory pipeline, get validated, and are moved to `raw/` or
@@ -147,7 +147,7 @@ your object ID in `reader_object_id` (lake reads) and `SYNAPSE_ADMIN_OBJECT_ID` 
 This project's dev workspace runs in `westus2`, because `eastus` and `eastus2` refused it. A
 workspace in a different region from its lake works; expect a little extra latency and egress cost.
 
-Full walkthrough: `../Week5-Azure-Synapse-Analytics-Tutorial.pdf`. That tutorial uses Bicep; this repo
+Full walkthrough: the course's `Week5-Azure-Synapse-Analytics-Tutorial.pdf` (not in this repo). That tutorial uses Bicep; this repo
 implements the same resources in Terraform. The tutorial builds `pl_curate` as a Synapse pipeline; this repo
 runs that step in ADF instead (`CurateToParquet` in `pl_landing_to_curated`), so skip its Studio Publish steps.
 Its troubleshooting table doesn't cover the region error above.

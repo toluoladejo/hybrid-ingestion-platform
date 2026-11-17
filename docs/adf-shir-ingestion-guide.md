@@ -1,6 +1,6 @@
 # On-Prem to Azure Ingestion with Data Factory and SHIR
 
-Nov 1, 2026
+Nov 1, 2026 (updated Nov 16, 2026)
 
 ## What you're building
 
@@ -327,9 +327,61 @@ How they connect: **the GitHub Actions pipeline deploys the ADF pipeline.** You 
 
 **Rule of thumb:** orchestration only (copy, move, call other services) means **ADF**; orchestration plus SQL/Spark transformation in one place means **Synapse** (or Fabric).
 
-**Where it fits in this project:** the lake already has `landing`, `raw`, `curated`, `quarantine` and `archive`, and `pipelines/validate.py` checks data quality. Synapse (or an equivalent) would come in at the **raw to curated** stage if the course has you transform, aggregate or serve the data with SQL.
+**Where it fits in this project:** the lake has `landing`, `raw`, `curated`, `quarantine` and `archive`, and `pipelines/validate.py` checks data quality. From week 5, Synapse sits at the end of the flow as the **query layer**: its built-in serverless SQL pool exposes the curated Parquet as `ingest.dbo.orders` (see `sql/serverless/`).
 
 **Microsoft Fabric:** Microsoft's newer analytics platform. It covers what Synapse does (pipelines, Spark, SQL, warehouse) plus Power BI, as one SaaS product. Synapse still works and is widely used, but Fabric is where Microsoft's investment is going; prefer it if a later module offers the choice.
+
+### Synapse in this project: no pipelines, Spark optional
+
+**Data Factory orchestrates, Synapse only queries.** Both pipelines are ADF pipelines, and Synapse moves no data:
+
+| Stage | Runs in | Defined in |
+| --- | --- | --- |
+| Ingest: SHIR folder to `raw/orders/`, then archive | ADF pipeline `ingest` | `infra/modules/datafactory/main.tf` |
+| Curate: `raw/` CSV to `curated/orders/` Parquet; bad files to `quarantine/` | ADF pipeline `curate` (`pl_landing_to_curated`) | `infra/modules/datafactory/curate.tf` |
+| Query: curated Parquet as `ingest.dbo.orders` | Synapse serverless SQL pool (no pipeline) | `sql/serverless/01_ingest.sql`, `02_readers.sql` |
+
+Terraform (`infra/modules/synapse/`) owns the workspace, its managed identity, firewall rules, lake roles and an optional Spark pool. Because there are no Synapse pipelines, the workspace has no Git link and nothing to Publish.
+
+**Why no Synapse pipelines?** They run on the same engine as ADF pipelines (same activities, integration runtimes, triggers and `@` expressions), so having both would just give you two orchestrators doing one job. ADF is the better home here:
+
+- **The SHIR is registered to ADF.** Moving to Synapse would mean registering it again; a Synapse workspace cannot use a shared SHIR from a data factory.
+- **Orchestration stays upstream.** ADF moves the data and Synapse only reads `curated/`. Swap Synapse for Fabric or Databricks later and orchestration does not change.
+- **One deployment path.** The ADF pipelines are `azurerm_data_factory_pipeline` resources in Terraform. Synapse pipelines would need a Git link or Studio publishing.
+- **One place to monitor.** All pipeline and activity runs land in Log Analytics (`ADFPipelineRun`, `ADFActivityRun`), ready for the week 6 alerts.
+
+Synapse pipelines make sense when there is no ADF at all, or when a team wants a single workspace to govern everything. Even then, ADF can run Synapse work itself with its **Synapse Notebook** and **Script** activities.
+
+**Apache Spark: available, but not needed yet.** The Spark pool is in the code and switched off: `deploy_spark = false` in `infra/env/dev.tfvars` ("true for the optional Lab 6"). Nothing at this stage needs it:
+
+| Job | Already handled by | What Spark would add |
+| --- | --- | --- |
+| Move files from the SHIR to the lake | ADF Copy | Nothing; Spark cannot reach the on-prem folder |
+| CSV to Parquet, bad-row checks, quarantine | ADF curate pipeline | Nothing at this data size |
+| Query curated data | Serverless SQL (`ingest.dbo.orders`) | Nothing for SELECTs and simple aggregates |
+| Validation | `pipelines/validate.py` | Nothing |
+
+The order files are small. Spark is built to spread heavy work across machines; here it would only add start-up time (2-4 minutes per session) and cost (3 nodes billed while a session runs).
+
+**When Spark starts to earn its place:**
+
+- **Volume:** gigabytes or more per run, where ADF data flows or serverless SQL get slow or expensive.
+- **Complex transforms:** joins across several datasets, deduplication, slowly changing dimensions, or window logic that is awkward in ADF or T-SQL.
+- **Writing tables, not just reading:** Delta Lake tables with MERGE/upserts, or a bronze/silver/gold layout. Serverless SQL can only read.
+- **Python work:** pandas-style analysis, ML feature prep, or reusing Python libraries on lake data.
+
+**Turning it on (Lab 6):**
+
+1. Set `deploy_spark = true` in `infra/env/dev.tfvars` and deploy through GitHub Actions as usual. This creates `sparksmall`: Spark 3.4, 3 Small MemoryOptimized nodes (4 vCores each), auto-pause after 15 idle minutes.
+2. Make sure the ADF pipelines have run at least once, so `curated/orders/` has data.
+3. In Synapse Studio: **Develop > New notebook**, attach `sparksmall`, and read the curated data. The workspace identity already has Storage Blob Data Contributor on the lake, and the deploy job makes you Synapse Administrator.
+
+```python
+df = spark.read.parquet("abfss://curated@<storage-account>.dfs.core.windows.net/orders/")
+df.show()
+```
+
+An idle pool costs nothing; a running session bills all 3 nodes. Stop the session when you finish instead of waiting for auto-pause. If a Spark step later joins the flow, trigger it from ADF with the Synapse Notebook activity so ADF stays the orchestrator.
 
 ## Troubleshooting
 
