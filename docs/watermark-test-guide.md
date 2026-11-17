@@ -5,6 +5,9 @@ This branch (`feature/watermark-incremental-test`) adds a working replica of a c
 canvas screenshots (2026-11-17) so the workflow can be run end to end on this platform's
 infrastructure, and its behaviour checked, especially on failure.
 
+Longer versions: `synapse-watermark-pipeline-guide.pdf` (pipeline walkthrough, how it works, troubleshooting)
+and `synapse-watermark-terraform-guide.pdf` (each Terraform resource, identities, plan, teardown).
+
 It uses **synthetic data only**. The rest of the platform keeps its rule that ADF moves
 data and Synapse queries it. This replica is the one place where Synapse runs pipelines,
 and it does so because the client's version runs in Synapse.

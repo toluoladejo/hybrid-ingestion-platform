@@ -159,7 +159,9 @@ Its troubleshooting table doesn't cover the region error above.
 Spark static load, reconciliation, conditional archiving). It runs on this platform's workspace
 and lake, with synthetic data in an optional Azure SQL DB. It is the one exception to
 "Synapse runs no pipelines". Everything is off by default (`deploy_watermark_test = false`).
-Setup and test scenarios: [`docs/watermark-test-guide.md`](docs/watermark-test-guide.md).
+Setup and test scenarios: [`docs/watermark-test-guide.md`](docs/watermark-test-guide.md). Full walkthroughs:
+[`docs/synapse-watermark-pipeline-guide.pdf`](docs/synapse-watermark-pipeline-guide.pdf) (the pipeline, step by step) and
+[`docs/synapse-watermark-terraform-guide.pdf`](docs/synapse-watermark-terraform-guide.pdf) (every Terraform resource it adds).
 
 ## Roadmap
 
