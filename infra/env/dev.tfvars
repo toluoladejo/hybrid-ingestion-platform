@@ -11,7 +11,7 @@ reader_object_id = ""              # az ad signed-in-user show --query id -o tsv
 deploy_spark     = false           # true for the optional Lab 6
 
 # tr_landing_csv was created by a failed apply on 2026-11-13; adopt it instead of recreating it.
-import_landing_trigger = true
+import_landing_trigger = false
 
 # Watermark test (feature/watermark-incremental-test, see docs/watermark-test-guide.md).
 # true also needs deploy_spark = true and reader_object_id set.
