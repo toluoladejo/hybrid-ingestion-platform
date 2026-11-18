@@ -50,11 +50,26 @@ jobs:
             -backend-config="key=${{ inputs.environment }}.tfstate"
       - name: Resources that will be deleted
         run: terraform state list || true
-      # import_landing_trigger=false: never try to adopt anything while tearing down.
+      # Never try to adopt anything while tearing down. Passed as a var file (not -var)
+      # so copies of the repo that removed the variable only get a warning, not an error.
+      #
+      # Retries: deleting the Synapse workspace is polled at subscription scope
+      # (Microsoft.Synapse/locations/operationStatuses/read), which an identity that is
+      # Contributor on the resource group only cannot read, so Terraform gives up while
+      # Azure keeps deleting. The next attempt refreshes, sees it gone, and carries on.
       - run: |
-          terraform destroy -input=false -auto-approve \
-            -var-file=env/${{ inputs.environment }}.tfvars \
-            -var=import_landing_trigger=false
+          echo 'import_landing_trigger = false' > "$RUNNER_TEMP/destroy.tfvars"
+          for attempt in 1 2 3 4; do
+            if terraform destroy -input=false -auto-approve \
+                 -var-file=env/${{ inputs.environment }}.tfvars \
+                 -var-file="$RUNNER_TEMP/destroy.tfvars"; then
+              exit 0
+            fi
+            [ "$attempt" = 4 ] && break
+            echo "::warning::Destroy attempt $attempt failed; waiting 5 min for Azure to finish deleting, then retrying."
+            sleep 300
+          done
+          exit 1
       - name: Confirm state is empty
         run: |
           left=$(terraform state list)
