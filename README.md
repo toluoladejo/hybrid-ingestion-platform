@@ -162,6 +162,7 @@ and lake, with synthetic data in an optional Azure SQL DB. It is the one excepti
 Setup and test scenarios: [`docs/watermark-test-guide.md`](docs/watermark-test-guide.md). Full walkthroughs:
 [`docs/synapse-watermark-pipeline-guide.pdf`](docs/synapse-watermark-pipeline-guide.pdf) (the pipeline, step by step) and
 [`docs/synapse-watermark-terraform-guide.pdf`](docs/synapse-watermark-terraform-guide.pdf) (every Terraform resource it adds).
+To run it by hand: [`docs/synapse-watermark-simulation-runbook.pdf`](docs/synapse-watermark-simulation-runbook.pdf).
 
 ## Roadmap
 
