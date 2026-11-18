@@ -1,0 +1,73 @@
+name: destroy
+
+# Manual only: deletes everything Terraform created for one environment, so the
+# next deploy starts from scratch. Run it from Actions > destroy > Run workflow.
+#
+# Kept: the resource group itself (Terraform only reads it), the tfstate storage
+# from scripts/bootstrap.sh, and the OIDC app/role assignments. The Key Vault is
+# soft-deleted for 7 days; the next apply recovers it automatically.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to destroy
+        required: true
+        type: choice
+        options: [dev, prod]
+      confirm:
+        description: Type the environment name again to confirm
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: terraform-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  destroy:
+    if: inputs.confirm == inputs.environment
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    env:
+      ARM_USE_OIDC: true
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - run: |
+          terraform init -input=false \
+            -backend-config="storage_account_name=${{ vars.TFSTATE_STORAGE_ACCOUNT }}" \
+            -backend-config="key=${{ inputs.environment }}.tfstate"
+      - name: Resources that will be deleted
+        run: terraform state list || true
+      # import_landing_trigger=false: never try to adopt anything while tearing down.
+      - run: |
+          terraform destroy -input=false -auto-approve \
+            -var-file=env/${{ inputs.environment }}.tfvars \
+            -var=import_landing_trigger=false
+      - name: Confirm state is empty
+        run: |
+          left=$(terraform state list)
+          if [ -n "$left" ]; then echo "Still in state:"; echo "$left"; exit 1; fi
+          echo "All Terraform-managed resources are gone."
+
+  refused:
+    if: inputs.confirm != inputs.environment
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          CONFIRM: ${{ inputs.confirm }}
+          TARGET: ${{ inputs.environment }}
+        run: |
+          echo "::error::Confirmation '$CONFIRM' does not match '$TARGET'. Nothing was destroyed."
+          exit 1
