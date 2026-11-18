@@ -50,6 +50,27 @@ jobs:
             -backend-config="key=${{ inputs.environment }}.tfstate"
       - name: Resources that will be deleted
         run: terraform state list || true
+
+      # A trigger left behind by a failed apply is not in state, so Terraform never
+      # deletes it, and ADF refuses to delete a pipeline a trigger still references.
+      # Stop and delete every trigger in the env's data factories first.
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Delete ADF triggers
+        env:
+          RG: rg-ingest-${{ inputs.environment }}
+        run: |
+          api=api-version=2018-06-01
+          for adf in $(az resource list -g "$RG" --resource-type Microsoft.DataFactory/factories --query '[].id' -o tsv); do
+            for t in $(az rest --method get --url "https://management.azure.com$adf/triggers?$api" --query 'value[].name' -o tsv); do
+              echo "Stopping and deleting trigger $t in ${adf##*/}"
+              az rest --method post --url "https://management.azure.com$adf/triggers/$t/stop?$api" -o none || true
+              az rest --method delete --url "https://management.azure.com$adf/triggers/$t?$api" -o none
+            done
+          done
       # Never try to adopt anything while tearing down. Passed as a var file (not -var)
       # so copies of the repo that removed the variable only get a warning, not an error.
       #
