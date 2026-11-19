@@ -106,4 +106,4 @@ jobs:
           TARGET: ${{ inputs.environment }}
         run: |
           echo "::error::Confirmation '$CONFIRM' does not match '$TARGET'. Nothing was destroyed."
-          exit 1
+          exit 1       

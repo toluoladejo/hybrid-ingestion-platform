@@ -17,3 +17,4 @@ import_landing_trigger = false
 # true also needs deploy_spark = true and reader_object_id set.
 deploy_watermark_test = false
 # synapse_git_repo = { account_name = "Starlyvil", repository_name = "hybrid-ingestion-platform", branch_name = "dev" }
+
