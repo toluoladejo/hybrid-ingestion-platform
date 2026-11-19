@@ -5,7 +5,7 @@
         "type": "AzureBlobFS",
         "description": "ADLS Gen2 lake (sink). Auth: workspace managed identity (needs Storage Blob Data Contributor).",
         "typeProperties": {
-            "url": "https://__STORAGE_ACCOUNT__.dfs.core.windows.net/"
+            "url": "https://stingestdevb39ab696297dc.dfs.core.windows.net/"
         },
         "connectVia": {
             "referenceName": "AutoResolveIntegrationRuntime",

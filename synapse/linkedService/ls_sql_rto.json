@@ -5,7 +5,7 @@
         "type": "AzureSqlDatabase",
         "description": "Azure SQL DB acting as BOTH the simulated source (schema src) and the control DB (schema etl). Auth: workspace managed identity.",
         "typeProperties": {
-            "connectionString": "Integrated Security=False;Encrypt=True;Connection Timeout=30;Data Source=__SQL_SERVER__.database.windows.net;Initial Catalog=__SQL_DB__"
+            "connectionString": "Integrated Security=False;Encrypt=True;Connection Timeout=30;Data Source=sql-wm-dev-b39ab696297dc.database.windows.net;Initial Catalog=rto_watermark_test"
         },
         "connectVia": {
             "referenceName": "AutoResolveIntegrationRuntime",

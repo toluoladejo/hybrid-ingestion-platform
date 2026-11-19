@@ -49,9 +49,9 @@
                     ]
                 },
                 "source": [
-                    "sql_server = \"__SQL_SERVER__.database.windows.net\"\n",
-                    "sql_database = \"__SQL_DB__\"\n",
-                    "storage_account = \"__STORAGE_ACCOUNT__\"\n",
+                    "sql_server = \"sql-wm-dev-b39ab696297dc.database.windows.net\"\n",
+                    "sql_database = \"rto_watermark_test\"\n",
+                    "storage_account = \"stingestdevb39ab696297dc\"\n",
                     "container = \"synapse\"\n",
                     "parent_run_id = \"interactive\""
                 ],

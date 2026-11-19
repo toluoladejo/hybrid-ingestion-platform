@@ -688,15 +688,15 @@
             },
             "SqlServer": {
                 "type": "string",
-                "defaultValue": "__SQL_SERVER__.database.windows.net"
+                "defaultValue": "sql-wm-dev-b39ab696297dc.database.windows.net"
             },
             "SqlDatabase": {
                 "type": "string",
-                "defaultValue": "__SQL_DB__"
+                "defaultValue": "rto_watermark_test"
             },
             "StorageAccount": {
                 "type": "string",
-                "defaultValue": "__STORAGE_ACCOUNT__"
+                "defaultValue": "stingestdevb39ab696297dc"
             },
             "Container": {
                 "type": "string",
