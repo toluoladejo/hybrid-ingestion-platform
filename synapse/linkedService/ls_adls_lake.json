@@ -1,15 +1,11 @@
 {
-    "name": "ls_adls_lake",
-    "properties": {
-        "annotations": [],
-        "type": "AzureBlobFS",
-        "description": "ADLS Gen2 lake (sink). Auth: workspace managed identity (needs Storage Blob Data Contributor).",
-        "typeProperties": {
-            "url": "https://stingestdevb39ab696297dc.dfs.core.windows.net/"
-        },
-        "connectVia": {
-            "referenceName": "AutoResolveIntegrationRuntime",
-            "type": "IntegrationRuntimeReference"
-        }
-    }
+	"name": "ls_adls_lake",
+	"properties": {
+		"description": "ADLS Gen2 lake (sink). Auth: workspace managed identity (needs Storage Blob Data Contributor).",
+		"annotations": [],
+		"type": "AzureBlobFS",
+		"typeProperties": {
+			"url": "https://stingestdevb39ab696297dc.dfs.core.windows.net/"
+		}
+	}
 }
