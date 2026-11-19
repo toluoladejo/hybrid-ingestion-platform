@@ -7,14 +7,18 @@ outbox_user = "Obasconcepts\\adfreader" # run `hostname` in PowerShell
 # eastus and eastus2 refuse new SQL servers for this subscription (SqlServerRegionDoesNotAllowProvisioning)
 synapse_location = "uksouth"
 allowed_ip       = "73.48.211.193" # curl -s https://api.ipify.org
-reader_object_id = ""              # az ad signed-in-user show --query id -o tsv
-deploy_spark     = false           # true for the optional Lab 6
+reader_object_id = "65cd1414-b020-431a-9b82-37c0bcff7321"              # az ad signed-in-user show --query id -o tsv
+deploy_spark     = true           # true for the optional Lab 6
 
 # tr_landing_csv was created by a failed apply on 2026-11-13; adopt it instead of recreating it.
-import_landing_trigger = false
+import_landing_trigger = true
 
 # Watermark test (feature/watermark-incremental-test, see docs/watermark-test-guide.md).
 # true also needs deploy_spark = true and reader_object_id set.
-deploy_watermark_test = false
-# synapse_git_repo = { account_name = "Starlyvil", repository_name = "hybrid-ingestion-platform", branch_name = "dev" }
+deploy_watermark_test = true
+synapse_git_repo = {
+    account_name = "toluoladejo", 
+    repository_name = "hybrid-ingestion-platform", 
+    branch_name = "dev" 
+}
 
